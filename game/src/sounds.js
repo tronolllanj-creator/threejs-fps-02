@@ -1,75 +1,278 @@
-import * as three from 'three';
-
 export function createSounds() {
   let ctx = null;
-  let master = null;
-  let noiseBuf = null;
-  let muted = false;
-
-  const init = () => {
-    if (ctx) return;
-    try {
-      ctx = new (window.AudioContext || window.webkitAudioContext)();
-      // All sounds are procedural: oscillators and filtered noise, no files.
+  let masterGain = null;
+  // All sounds are procedural: oscillators and filtered noise, no files.
 const MASTER_GAIN = 0.5;
-      master = ctx.createGain();
-      master.gain.value = MASTER_GAIN;
-      master.connect(ctx.destination);
+  let muted = false;
+  let noiseBuffer = null;
 
-      const len = ctx.sampleRate * 1;
-      noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
-      const data = noiseBuf.getChannelData(0);
-      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+  function getContext() {
+    if (!ctx) {
+      try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+          ctx = new AudioContext();
+          masterGain = ctx.createGain();
+          masterGain.gain.value = MASTER_GAIN;
+          masterGain.connect(ctx.destination);
+          
+          // Build 1s white noise buffer
+          const bufferSize = ctx.sampleRate;
+          noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+          const output = noiseBuffer.getChannelData(0);
+          for (let i = 0; i < bufferSize; i++) {
+            output[i] = Math.random() * 2 - 1;
+          }
+        }
+      } catch (e) {}
+    }
+    return ctx;
+  }
+
+  function makeNoiseSource() {
+    if (!noiseBuffer || !ctx) return null;
+    const src = ctx.createBufferSource();
+    src.buffer = noiseBuffer;
+    return src;
+  }
+
+  function safePlay(fn) {
+    if (muted) return;
+    try {
+      const c = getContext();
+      if (c) {
+        if (c.state === 'suspended') c.resume();
+        fn(c);
+      }
     } catch (e) {}
-  };
-
-  const playTone = (freq, type, dur, gainVal = 0.1) => {
-    try {
-      init(); if (!ctx || muted) return;
-      const o = ctx.createOscillator(); const g = ctx.createGain();
-      o.type = type; o.frequency.value = freq;
-      g.gain.setValueAtTime(gainVal, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-      o.connect(g); g.connect(master);
-      o.start(); o.stop(ctx.currentTime + dur);
-    } catch(e){}
-  };
-
-  const playNoise = (filterFreq, dur, gainVal = 0.2, q = 1) => {
-    try {
-      init(); if (!ctx || muted || !noiseBuf) return;
-      const s = ctx.createBufferSource(); s.buffer = noiseBuf;
-      const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = filterFreq; f.Q.value = q;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(gainVal, ctx.currentTime);
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + dur);
-      s.connect(f); f.connect(g); g.connect(master);
-      s.start(); s.stop(ctx.currentTime + dur);
-    } catch(e){}
-  };
+  }
 
   return {
-    unlock() { try { init(); if (ctx && ctx.state === 'suspended') ctx.resume(); } catch(e){} },
-    toggleMute() { muted = !muted; if (master) master.gain.value = muted ? 0 : 0.5; return muted; },
+    unlock() {
+      safePlay(() => {});
+    },
+    
     shoot(kind) {
-      if (kind === 'sniper') { playNoise(800, 0.4, 0.5, 3); playTone(60, 'sawtooth', 0.4, 0.3); }
-      else if (kind === 'rifle') { playNoise(1500, 0.15, 0.3); playTone(120, 'square', 0.15, 0.15); }
-      else { playNoise(2200, 0.1, 0.2); playTone(200, 'square', 0.1, 0.1); }
+      safePlay(c => {
+        const t = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        const filter = c.createBiquadFilter();
+        const noise = makeNoiseSource();
+        const noiseGain = c.createGain();
+        
+        if (!noise) return;
+        
+        let freq = 150, dur = 0.15, cutoff = 1200;
+        if (kind === 'pistol') { freq = 220; dur = 0.1; cutoff = 1800; }
+        else if (kind === 'smg') { freq = 200; dur = 0.08; cutoff = 2200; }
+        else if (kind === 'sniper') { freq = 80; dur = 0.4; cutoff = 800; }
+        
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(freq, t);
+        osc.frequency.exponentialRampToValueAtTime(30, t + dur);
+        
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(cutoff, t);
+        
+        noiseGain.gain.setValueAtTime(0.5, t);
+        noiseGain.gain.exponentialRampToValueAtTime(0.01, t + dur);
+        
+        gain.gain.setValueAtTime(0.4, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + dur);
+        
+        osc.connect(filter); filter.connect(gain); gain.connect(masterGain);
+        noise.connect(filter); noise.connect(noiseGain); noiseGain.connect(masterGain);
+        
+        osc.start(t); osc.stop(t + dur);
+        noise.start(t); noise.stop(t + dur);
+      });
     },
-    dry() { playTone(800, 'sine', 0.03, 0.05); },
+
+    dry() {
+      safePlay(c => {
+        const t = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(800, t);
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.03);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.03);
+      });
+    },
+
     hit(kill) {
-      playTone(1200, 'sine', 0.05, 0.1);
-      if (kill) setTimeout(() => playTone(1800, 'sine', 0.08, 0.15), 60);
+      safePlay(c => {
+        const t = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1200, t);
+        if (kill) osc.frequency.setValueAtTime(1800, t + 0.05);
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + (kill ? 0.15 : 0.08));
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + (kill ? 0.15 : 0.08));
+      });
     },
-    reload() { playTone(400, 'triangle', 0.05, 0.1); setTimeout(() => playTone(600, 'triangle', 0.05, 0.1), 120); },
-    hurt() { playNoise(300, 0.3, 0.4, 2); playTone(80, 'sawtooth', 0.3, 0.3); },
-    plantTick(n) { const k = (typeof n === 'number' ? n : 0); playTone(600 + k * 150, 'sine', 0.08, 0.1); },
-    explode() { playNoise(180, 1.5, 0.8, 5); playTone(30, 'sawtooth', 1.5, 0.6); },
-    win() { playTone(523.25, 'sine', 0.15, 0.1); setTimeout(() => playTone(659.25, 'sine', 0.15, 0.1), 150); setTimeout(() => playTone(783.99, 'sine', 0.3, 0.15), 300); },
-    lose() { playTone(300, 'sawtooth', 0.2, 0.15); setTimeout(() => playTone(200, 'sawtooth', 0.3, 0.2), 200); },
-    buy() { playTone(900, 'sine', 0.06, 0.08); setTimeout(() => playTone(1200, 'sine', 0.1, 0.1), 80); },
-    step() { playNoise(1000, 0.04, 0.03, 0.5); },
-    impact() { playNoise(600, 0.2, 0.4, 2); },
-    throw() { playNoise(1200, 0.3, 0.2, 1); }
+
+    reload() {
+      safePlay(c => {
+        const t = c.currentTime;
+        [0, 0.12].forEach(offset => {
+          const osc = c.createOscillator();
+          const gain = c.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(400, t + offset);
+          gain.gain.setValueAtTime(0.15, t + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.04);
+          osc.connect(gain); gain.connect(masterGain);
+          osc.start(t + offset); osc.stop(t + offset + 0.04);
+        });
+      });
+    },
+
+    hurt() {
+      safePlay(c => {
+        const t = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(90, t);
+        osc.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+        gain.gain.setValueAtTime(0.5, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.3);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.3);
+      });
+    },
+
+    plantTick(n) {
+      safePlay(c => {
+        const t = c.currentTime;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400 + n * 100, t);
+        gain.gain.setValueAtTime(0.2, t);
+        gain.gain.exponentialRampToValueAtTime(0.01, t + 0.08);
+        osc.connect(gain); gain.connect(masterGain);
+        osc.start(t); osc.stop(t + 0.08);
+      });
+    },
+
+    explode() {
+      safePlay(c => {
+        const t = c.currentTime;
+        const noise = makeNoiseSource();
+        const filter = c.createBiquadFilter();
+        const gain = c.createGain();
+        const osc = c.createOscillator();
+        if (!noise) return;
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(200, t);
+        filter.frequency.exponentialRampToValueAtTime(30, t + 1.5);
+        gain.gain.setValueAtTime(0.8, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(120, t);
+        osc.frequency.exponentialRampToValueAtTime(30, t + 1.5);
+        noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
+        osc.connect(gain);
+        noise.start(t); noise.stop(t + 1.5);
+        osc.start(t); osc.stop(t + 1.5);
+      });
+    },
+
+    smoke() {
+      safePlay(c => {
+        const t = c.currentTime;
+        const noise = makeNoiseSource();
+        const filter = c.createBiquadFilter();
+        const gain = c.createGain();
+        if (!noise) return;
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(600, t);
+        gain.gain.setValueAtTime(0.01, t);
+        gain.gain.linearRampToValueAtTime(0.3, t + 0.3);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 1.5);
+        noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
+        noise.start(t); noise.stop(t + 1.5);
+      });
+    },
+
+    win() {
+      safePlay(c => {
+        const t = c.currentTime;
+        [0, 0.15, 0.3].forEach((offset, idx) => {
+          const osc = c.createOscillator();
+          const gain = c.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime([523.25, 659.25, 783.99][idx], t + offset);
+          gain.gain.setValueAtTime(0.2, t + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.3);
+          osc.connect(gain); gain.connect(masterGain);
+          osc.start(t + offset); osc.stop(t + offset + 0.3);
+        });
+      });
+    },
+
+    lose() {
+      safePlay(c => {
+        const t = c.currentTime;
+        [0, 0.2].forEach((offset, idx) => {
+          const osc = c.createOscillator();
+          const gain = c.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime([300, 200][idx], t + offset);
+          gain.gain.setValueAtTime(0.2, t + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.3);
+          osc.connect(gain); gain.connect(masterGain);
+          osc.start(t + offset); osc.stop(t + offset + 0.3);
+        });
+      });
+    },
+
+    buy() {
+      safePlay(c => {
+        const t = c.currentTime;
+        [0, 0.08].forEach((offset, idx) => {
+          const osc = c.createOscillator();
+          const gain = c.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime([880, 1760][idx], t + offset);
+          gain.gain.setValueAtTime(0.15, t + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.1);
+          osc.connect(gain); gain.connect(masterGain);
+          osc.start(t + offset); osc.stop(t + offset + 0.1);
+        });
+      });
+    },
+
+    step() {
+      safePlay(c => {
+        const t = c.currentTime;
+        const noise = makeNoiseSource();
+        const filter = c.createBiquadFilter();
+        const gain = c.createGain();
+        if (!noise) return;
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(300, t);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+        noise.connect(filter); filter.connect(gain); gain.connect(masterGain);
+        noise.start(t); noise.stop(t + 0.05);
+      });
+    },
+
+    toggleMute() {
+      muted = !muted;
+      if (masterGain && ctx) {
+        masterGain.gain.setValueAtTime(muted ? 0 : MASTER_GAIN, ctx.currentTime);
+      }
+      return muted;
+    }
   };
 }
