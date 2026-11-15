@@ -3,7 +3,88 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TIDELOCK HARBOR — a three.js tactical FPS</title>
+<title>EMBER CANYON — a three.js tactical FPS</title>
+<meta name="description" content="EMBER CANYON: an original three.js tactical FPS. Two teams, rounds, plant the charge, buy weapons, smoke the canyon, outplay the bots.">
+<style>
+  :root {
+    --canvas: #1a130e;
+    --surface: #2a2016;
+    --hairline: #4a3a26;
+    --ink: #f2e8d5;
+    --muted: #b8a88e;
+    --accent: #f7b731;
+    --teal: #3ec6c0;
+    --crimson: #e04e3a;
+    --gold: #f0c040;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: monospace; }
+  body, html { width: 100%; height: 100%; overflow: hidden; background: var(--canvas); color: var(--ink); }
+  #game { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+  #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; }
+  
+  /* Crosshair & Hitmarker */
+  #crosshair { position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; transform: translate(-50%, -50%); border: 1px solid var(--ink); border-radius: 50%; opacity: 0.8; }
+  #hitmarker { position: absolute; top: 50%; left: 50%; width: 16px; height: 16px; transform: translate(-50%, -50%); opacity: 0; pointer-events: none; }
+  #hitmarker::before, #hitmarker::after { content: ''; position: absolute; top: 7px; left: -2px; width: 20px; height: 2px; background: var(--gold); transform: rotate(45deg); }
+  #hitmarker::after { transform: rotate(-45deg); }
+
+  /* HUD Elements */
+  #ammo-display { position: absolute; bottom: 20px; right: 30px; text-align: right; }
+  #ammo-mag { font-size: 3rem; font-weight: bold; color: var(--accent); }
+  #ammo-reserve { font-size: 1.5rem; color: var(--muted); }
+
+  #health-display { position: absolute; bottom: 20px; left: 30px; width: 220px; }
+  #health-num { font-size: 2rem; font-weight: bold; color: var(--teal); margin-bottom: 4px; }
+  #health-bar { width: 100%; height: 8px; background: var(--surface); border: 1px solid var(--hairline); }
+  #health-fill { width: 100%; height: 100%; background: var(--teal); transition: width 0.1s; }
+
+  #top-bar { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  #timer { font-size: 1.8rem; font-weight: bold; color: var(--ink); background: var(--surface); padding: 2px 12px; border: 1px solid var(--hairline); }
+  #score-container { display: flex; gap: 16px; font-size: 1.2rem; font-weight: bold; }
+  #score-dune { color: var(--teal); }
+  #score-vulture { color: var(--crimson); }
+  #round-label { font-size: 0.9rem; color: var(--muted); }
+
+  #top-right { position: absolute; top: 20px; right: 30px; text-align: right; }
+  #money { font-size: 1.4rem; color: var(--gold); font-weight: bold; margin-bottom: 2px; }
+  #weapon-name { font-size: 1rem; color: var(--muted); text-transform: uppercase; }
+
+  #objective { position: absolute; top: 20px; left: 30px; font-size: 0.9rem; color: var(--accent); background: var(--surface); padding: 4px 8px; border: 1px solid var(--hairline); }
+  
+  #killfeed { position: absolute; top: 70px; right: 30px; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; font-size: 0.85rem; }
+  .killfeed-item { background: rgba(42,32,22,0.8); padding: 2px 8px; border-left: 3px solid var(--accent); }
+
+  #plant-bar { position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%); width: 200px; height: 12px; background: var(--surface); border: 1px solid var(--hairline); display: none; }
+  #plant-fill { width: 0%; height: 100%; background: var(--accent); }
+
+  #buy-menu { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--surface); border: 2px solid var(--hairline); padding: 20px; width: 350px; display: none; pointer-events: auto; }
+  #buy-menu h3 { margin-bottom: 12px; color: var(--accent); text-align: center; }
+  #buy-items { display: flex; flex-direction: column; gap: 8px; }
+  .buy-btn { background: var(--canvas); border: 1px solid var(--hairline); color: var(--ink); padding: 8px; text-align: left; cursor: pointer; display: flex; justify-content: space-between; }
+  .buy-btn:hover { border-color: var(--accent); background: var(--hairline); }
+
+  #vignette { position: absolute; top: 0; left: 0; width: 100%; height: 100%; box-shadow: inset 0 0 100px var(--crimson); opacity: 0; pointer-events: none; transition: opacity 0.2s; }
+  #toast { position: absolute; top: 120px; left: 50%; transform: translateX(-50%); font-size: 1.1rem; color: var(--accent); background: rgba(26,19,14,0.9); padding: 6px 16px; border: 1px solid var(--hairline); opacity: 0; transition: opacity 0.3s; }
+  
+  #damage-numbers { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+  .dmg-num { position: absolute; font-weight: bold; font-size: 1.2rem; color: var(--gold); animation: floatUp 0.8s forwards; }
+  @keyframes floatUp { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-30px); } }
+
+  #round-history { position: absolute; top: 85px; left: 50%; transform: translateX(-50%); display: flex; gap: 4px; }
+  .round-dot { width: 10px; height: 10px; background: var(--surface); border: 1px solid var(--hairline); }
+  .round-dot.dune { background: var(--teal); }
+  .round-dot.vulture { background: var(--crimson); }
+
+  #hit-direction { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; }
+  #smoke-indicator { position: absolute; bottom: 70px; right: 30px; font-size: 0.8rem; color: var(--teal); display: none; }
+
+  #overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(26,19,14,0.45); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; z-index: 10; pointer-events: auto; }
+  #overlay-title { font-size: 3rem; font-weight: bold; color: var(--accent); letter-spacing: 2px; }
+  #overlay-copy { font-size: 1.1rem; color: var(--muted); max-width: 500px; text-align: center; line-height: 1.4; }
+  #overlay-sub { font-size: 0.9rem; color: var(--hairline); }
+  #play { background: var(--accent); color: var(--canvas); border: none; padding: 12px 32px; font-size: 1.2rem; font-weight: bold; cursor: pointer; text-transform: uppercase; }
+  #play:hover { background: var(--gold); }
+</style>
 <script type="importmap">
 {
   "imports": {
@@ -11,308 +92,64 @@
   }
 }
 </script>
-<style>
-  :root {
-    --canvas: #0f141b;
-    --surface: #1d2530;
-    --hairline: #2e3a47;
-    --ink: #e8e4d8;
-    --muted: #8fa3b0;
-    --accent: #f2a541;
-    --accent-soft: #f7c06a;
-    --azure: #37c8d9;
-    --ember: #e05a4e;
-    --gold: #f0c040;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body, html {
-    width: 100%; height: 100%;
-    overflow: hidden;
-    background-color: var(--canvas);
-    color: var(--ink);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  }
-  #game {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 1;
-  }
-  #hud {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    z-index: 2;
-    pointer-events: none;
-  }
-  #crosshair {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 6px; height: 6px;
-    margin: -3px 0 0 -3px;
-    border: 1px solid var(--ink);
-    background: rgba(232, 228, 216, 0.4);
-    border-radius: 50%;
-  }
-  #hitmarker {
-    position: absolute;
-    top: 50%; left: 50%;
-    width: 16px; height: 16px;
-    margin: -8px 0 0 -8px;
-    opacity: 0;
-    transition: opacity 0.1s ease;
-  }
-  #hitmarker::before, #hitmarker::after {
-    content: '';
-    position: absolute;
-    background: var(--gold);
-  }
-  #hitmarker::before { top: 7px; left: 0; width: 16px; height: 2px; }
-  #hitmarker::after { top: 0; left: 7px; width: 2px; height: 16px; }
-  
-  .hud-block {
-    position: absolute;
-    background: rgba(29, 37, 48, 0.85);
-    border: 1px solid var(--hairline);
-    padding: 8px 12px;
-  }
-  #ammo-box {
-    bottom: 24px; right: 24px;
-    font-size: 24px; font-weight: bold;
-    letter-spacing: 1px;
-  }
-  #ammo-reserve {
-    font-size: 14px;
-    color: var(--muted);
-    margin-left: 4px;
-  }
-  #health-box {
-    bottom: 24px; left: 24px;
-    width: 220px;
-  }
-  #health-num {
-    font-size: 18px; font-weight: bold;
-    margin-bottom: 4px;
-  }
-  #health-bar {
-    width: 100%; height: 6px;
-    background: var(--hairline);
-    overflow: hidden;
-  }
-  #health-fill {
-    width: 100%; height: 100%;
-    background: var(--azure);
-    transition: width 0.2s;
-  }
-  #top-center {
-    top: 16px; left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    gap: 16px;
-    align-items: center;
-    font-size: 14px;
-  }
-  #timer { font-weight: bold; color: var(--accent); }
-  #score-tide { color: var(--azure); font-weight: bold; }
-  #score-reef { color: var(--ember); font-weight: bold; }
-  #round-label { color: var(--muted); }
-  
-  #top-right {
-    top: 16px; right: 24px;
-    text-align: right;
-  }
-  #money { color: var(--gold); font-weight: bold; font-size: 16px; }
-  #weapon-name { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
-  
-  #objective {
-    top: 16px; left: 24px;
-    font-size: 12px;
-    color: var(--muted);
-  }
-  
-  #killfeed {
-    top: 60px; right: 24px;
-    width: 260px;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-  }
-  .kill-entry {
-    background: rgba(29, 37, 48, 0.7);
-    border-left: 3px solid var(--hairline);
-    padding: 4px 8px;
-    font-size: 11px;
-    text-align: right;
-  }
-  
-  #plant-bar {
-    position: absolute;
-    bottom: 120px; left: 50%;
-    transform: translateX(-50%);
-    width: 200px; height: 8px;
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    display: none;
-    overflow: hidden;
-  }
-  #plant-fill {
-    width: 0%; height: 100%;
-    background: var(--accent);
-  }
-  
-  #buy-menu {
-    position: absolute;
-    top: 50%; left: 50%;
-    transform: translate(-50%, -50%);
-    width: 400px;
-    background: rgba(15, 20, 27, 0.95);
-    border: 1px solid var(--hairline);
-    padding: 24px;
-    display: none;
-    pointer-events: auto;
-    z-index: 10;
-  }
-  #buy-menu h2 {
-    font-size: 16px;
-    margin-bottom: 16px;
-    color: var(--accent);
-    border-bottom: 1px solid var(--hairline);
-    padding-bottom: 8px;
-  }
-  #buy-items {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .buy-btn {
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    color: var(--ink);
-    padding: 10px;
-    text-align: left;
-    font-family: inherit;
-    cursor: pointer;
-    display: flex;
-    justify-content: space-between;
-  }
-  .buy-btn:hover { border-color: var(--accent); }
-  
-  #vignette {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    box-shadow: inset 0 0 100px rgba(224, 90, 78, 0.6);
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.2s;
-    z-index: 5;
-  }
-  
-  #toast {
-    position: absolute;
-    bottom: 80px; left: 50%;
-    transform: translateX(-50%);
-    background: var(--surface);
-    border: 1px solid var(--hairline);
-    padding: 6px 16px;
-    font-size: 12px;
-    opacity: 0;
-    transition: opacity 0.3s;
-  }
-  
-  #overlay {
-    position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    background: rgba(15, 20, 27, 0.9);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 20;
-    pointer-events: auto;
-    text-align: center;
-    padding: 20px;
-  }
-  #overlay-title {
-    font-size: 32px;
-    font-weight: bold;
-    color: var(--accent);
-    margin-bottom: 8px;
-    letter-spacing: 2px;
-  }
-  #overlay-copy {
-    font-size: 14px;
-    color: var(--muted);
-    margin-bottom: 4px;
-  }
-  #overlay-sub {
-    font-size: 12px;
-    color: var(--hairline);
-    margin-bottom: 24px;
-  }
-  #play {
-    background: var(--accent);
-    color: var(--canvas);
-    border: none;
-    padding: 12px 32px;
-    font-size: 14px;
-    font-weight: bold;
-    font-family: inherit;
-    cursor: pointer;
-    letter-spacing: 1px;
-  }
-  #play:hover { opacity: 0.9; }
-</style>
 </head>
 <body>
-  <div id="game"></div>
-  <div id="vignette"></div>
-  <div id="hud">
-    <div id="crosshair"></div>
-    <div id="hitmarker"></div>
-    
-    <div id="objective" class="hud-block">OBJECTIVE: ELIMINATE REEF OR PLANT AT A/B</div>
-    
-    <div id="top-center" class="hud-block">
-      <span id="score-tide">TIDE 0</span>
-      <span id="round-label">ROUND 1</span>
-      <span id="score-reef">0 REEF</span>
-      <span id="timer">01:40</span>
+<canvas id="game"></canvas>
+<div id="hud">
+  <div id="crosshair"></div>
+  <div id="hitmarker"></div>
+  
+  <div id="objective">OBJECTIVE: Eliminate enemies or plant at A / B</div>
+  
+  <div id="top-bar">
+    <div id="timer">1:40</div>
+    <div id="score-container">
+      <span id="score-dune">DUNE 0</span>
+      <span>-</span>
+      <span id="score-vulture">VULTURE 0</span>
     </div>
-    
-    <div id="top-right" class="hud-block">
-      <div id="money">$800</div>
-      <div id="weapon-name">PISTOL</div>
-    </div>
-    
-    <div id="killfeed"></div>
-    
-    <div id="health-box" class="hud-block">
-      <div id="health-num">100</div>
-      <div id="health-bar"><div id="health-fill"></div></div>
-    </div>
-    
-    <div id="ammo-box" class="hud-block">
-      <span id="ammo-mag">12</span>/<span id="ammo-reserve">36</span>
-    </div>
-    
-    <div id="plant-bar"><div id="plant-fill"></div></div>
-    
-    <div id="toast"></div>
-    
-    <div id="buy-menu">
-      <h2>TACTICAL ACQUISITIONS</h2>
-      <div id="buy-items"></div>
-    </div>
-    
-    <div id="overlay">
-      <div id="overlay-title">TIDELOCK HARBOR</div>
-      <div id="overlay-copy">TACTICAL CONTAINER-TERMINAL OPERATIONS</div>
-      <div id="overlay-sub">FIRST TO 5 WINS — TIDE (AZURE) VS REEF (REEF)</div>
-      <button id="play">DEPLOY</button>
-    </div>
+    <div id="round-label">BUY PHASE</div>
   </div>
-  <script type="module" src="./src/main.js"></script>
+
+  <div id="round-history"></div>
+
+  <div id="top-right">
+    <div id="money">$800</div>
+    <div id="weapon-name">Pistol</div>
+  </div>
+
+  <div id="killfeed"></div>
+
+  <div id="health-display">
+    <div id="health-num">100</div>
+    <div id="health-bar"><div id="health-fill"></div></div>
+  </div>
+
+  <div id="ammo-display">
+    <span id="ammo-mag">12</span>/<span id="ammo-reserve">36</span>
+  </div>
+
+  <div id="plant-bar"><div id="plant-fill"></div></div>
+  
+  <div id="buy-menu">
+    <h3>TACTICAL BUY MENU</h3>
+    <div id="buy-items"></div>
+  </div>
+
+  <div id="vignette"></div>
+  <div id="toast"></div>
+  <div id="damage-numbers"></div>
+  <div id="hit-direction"></div>
+  <div id="smoke-indicator">SMOKE ACTIVE</div>
+
+  <div id="overlay">
+    <div id="overlay-title">EMBER CANYON</div>
+    <div id="overlay-copy">Dawn desert outpost tactical FPS. Attack or defend sites A and B. Buy weapons between rounds. First to 5 rounds wins.</div>
+    <div id="overlay-sub">WASD to Move | Mouse to Look | Left Click to Shoot | R Reload | E Plant/Defuse | B Buy</div>
+    <button id="play">DEPLOY</button>
+  </div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
