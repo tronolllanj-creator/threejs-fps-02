@@ -1,29 +1,42 @@
-# TIDELOCK HARBOR
+# EMBER CANYON — a three.js tactical FPS
 
-A tactical multiplayer-style first-person shooter built with Three.js (threejs-fps-02 entry). Pits TIDE against REEF in a classic plant-or-defuse bomb scenario. First team to 5 rounds wins.
+A dawn desert-canyon tactical FPS for the make.fun threejs-fps-02 bounty.
 
-## How to Run
+EMBER CANYON is round 2 of the threejs-fps-02 entry, an improved tactical shooter building directly on round 1's TIDELOCK HARBOR.
 
-Serve the repository root using any local static file server (e.g. `npx serve`) or open `game/index.html` directly in a modern browser with WebGL2 support.
+## How to play
 
-## Controls
+1. Open `game/index.html` in desktop Chrome.
+2. Click the screen to capture the mouse.
+3. **WASD** to move, **Mouse** to look, **Left-Click** to fire.
+4. **R** to reload, **E** (hold) to plant the charge.
+5. **G** for frag grenade, **H** for smoke grenade.
+6. **B** to open the buy menu, **M** to toggle audio.
 
-- **WASD** / **Arrows**: Move
-- **Mouse**: Look around
-- **Left Click**: Shoot
-- **R**: Reload
-- **E**: Plant or defuse spike
-- **1-4**: Buy weapons and gear
-- **G**: Throw grenade
-- **Shift**: Walk
-- **Ctrl**: Crouch
+## Match rules
 
-## Match Rules
+- First to 5 rounds wins the match (max 9 rounds).
+- Attackers win by planting the charge at A or B, or by eliminating all defenders (VULTURE).
+- Defenders win by defusing the charge, preventing the plant, or eliminating all attackers.
+- Earn money each round for kills and objectives to spend during the buy phase.
 
-- **Buy Phase**: Purchase weapons, shields, and utility at the start of each round.
-- **Objective**: Attackers (TIDE) must plant the spike at site A or B. Defenders (REEF) must prevent the plant or defuse it.
-- **Economy**: Earn credits based on kills, objectives, and round outcomes.
+## Weapons
 
-## Vendor Note
+- **Sidearm / Pistol**: Lightweight backup with reliable accuracy.
+- **SMG**: High rate of fire for close-quarters engagements.
+- **Rifle**: Versatile automatic weapon for mid-to-long ranges.
+- **Sniper**: High-damage precision rifle with scoped zoom.
+- **Grenades**: Lethal frag grenades and tactical smoke for cover.
 
-Three.js r187 is vendored locally in `game/vendor/three/` for offline play and stability.
+## Bots
+
+- **Enemies (VULTURE)**: Falcon (sniper), Adder (rusher), Rook (holder).
+- **Allies**: Sable and Kite fight alongside you.
+
+## Tech
+
+- **three.js 0.187.0**: Vendored locally with ES modules.
+- **Zero Build**: No bundlers, npm install, or build steps required.
+- **Offline**: Entirely self-contained with no external network requests.
+- **Deterministic**: Fixed 1/60s physics and simulation tick rate.
+- **Audio**: Fully procedural WebAudio synthesis for all sound effects.
