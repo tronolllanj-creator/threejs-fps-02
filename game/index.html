@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TIDELOCK HARBOR — a three.js tactical FPS</title>
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/three.module.min.js"
+  }
+}
+</script>
+<style>
+  :root {
+    --canvas: #0f141b;
+    --surface: #1d2530;
+    --hairline: #2e3a47;
+    --ink: #e8e4d8;
+    --muted: #8fa3b0;
+    --accent: #f2a541;
+    --accent-soft: #f7c06a;
+    --azure: #37c8d9;
+    --ember: #e05a4e;
+    --gold: #f0c040;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body, html {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background-color: var(--canvas);
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+  #game {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+  }
+  #hud {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 2;
+    pointer-events: none;
+  }
+  #crosshair {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 6px; height: 6px;
+    margin: -3px 0 0 -3px;
+    border: 1px solid var(--ink);
+    background: rgba(232, 228, 216, 0.4);
+    border-radius: 50%;
+  }
+  #hitmarker {
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 16px; height: 16px;
+    margin: -8px 0 0 -8px;
+    opacity: 0;
+    transition: opacity 0.1s ease;
+  }
+  #hitmarker::before, #hitmarker::after {
+    content: '';
+    position: absolute;
+    background: var(--gold);
+  }
+  #hitmarker::before { top: 7px; left: 0; width: 16px; height: 2px; }
+  #hitmarker::after { top: 0; left: 7px; width: 2px; height: 16px; }
+  
+  .hud-block {
+    position: absolute;
+    background: rgba(29, 37, 48, 0.85);
+    border: 1px solid var(--hairline);
+    padding: 8px 12px;
+  }
+  #ammo-box {
+    bottom: 24px; right: 24px;
+    font-size: 24px; font-weight: bold;
+    letter-spacing: 1px;
+  }
+  #ammo-reserve {
+    font-size: 14px;
+    color: var(--muted);
+    margin-left: 4px;
+  }
+  #health-box {
+    bottom: 24px; left: 24px;
+    width: 220px;
+  }
+  #health-num {
+    font-size: 18px; font-weight: bold;
+    margin-bottom: 4px;
+  }
+  #health-bar {
+    width: 100%; height: 6px;
+    background: var(--hairline);
+    overflow: hidden;
+  }
+  #health-fill {
+    width: 100%; height: 100%;
+    background: var(--azure);
+    transition: width 0.2s;
+  }
+  #top-center {
+    top: 16px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    font-size: 14px;
+  }
+  #timer { font-weight: bold; color: var(--accent); }
+  #score-tide { color: var(--azure); font-weight: bold; }
+  #score-reef { color: var(--ember); font-weight: bold; }
+  #round-label { color: var(--muted); }
+  
+  #top-right {
+    top: 16px; right: 24px;
+    text-align: right;
+  }
+  #money { color: var(--gold); font-weight: bold; font-size: 16px; }
+  #weapon-name { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-top: 2px; }
+  
+  #objective {
+    top: 16px; left: 24px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  
+  #killfeed {
+    top: 60px; right: 24px;
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .kill-entry {
+    background: rgba(29, 37, 48, 0.7);
+    border-left: 3px solid var(--hairline);
+    padding: 4px 8px;
+    font-size: 11px;
+    text-align: right;
+  }
+  
+  #plant-bar {
+    position: absolute;
+    bottom: 120px; left: 50%;
+    transform: translateX(-50%);
+    width: 200px; height: 8px;
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    display: none;
+    overflow: hidden;
+  }
+  #plant-fill {
+    width: 0%; height: 100%;
+    background: var(--accent);
+  }
+  
+  #buy-menu {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    width: 400px;
+    background: rgba(15, 20, 27, 0.95);
+    border: 1px solid var(--hairline);
+    padding: 24px;
+    display: none;
+    pointer-events: auto;
+    z-index: 10;
+  }
+  #buy-menu h2 {
+    font-size: 16px;
+    margin-bottom: 16px;
+    color: var(--accent);
+    border-bottom: 1px solid var(--hairline);
+    padding-bottom: 8px;
+  }
+  #buy-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .buy-btn {
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    color: var(--ink);
+    padding: 10px;
+    text-align: left;
+    font-family: inherit;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+  }
+  .buy-btn:hover { border-color: var(--accent); }
+  
+  #vignette {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    box-shadow: inset 0 0 100px rgba(224, 90, 78, 0.6);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s;
+    z-index: 5;
+  }
+  
+  #toast {
+    position: absolute;
+    bottom: 80px; left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 1px solid var(--hairline);
+    padding: 6px 16px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+  
+  #overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(15, 20, 27, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    pointer-events: auto;
+    text-align: center;
+    padding: 20px;
+  }
+  #overlay-title {
+    font-size: 32px;
+    font-weight: bold;
+    color: var(--accent);
+    margin-bottom: 8px;
+    letter-spacing: 2px;
+  }
+  #overlay-copy {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+  #overlay-sub {
+    font-size: 12px;
+    color: var(--hairline);
+    margin-bottom: 24px;
+  }
+  #play {
+    background: var(--accent);
+    color: var(--canvas);
+    border: none;
+    padding: 12px 32px;
+    font-size: 14px;
+    font-weight: bold;
+    font-family: inherit;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  #play:hover { opacity: 0.9; }
+</style>
+</head>
+<body>
+  <div id="game"></div>
+  <div id="vignette"></div>
+  <div id="hud">
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+    
+    <div id="objective" class="hud-block">OBJECTIVE: ELIMINATE REEF OR PLANT AT A/B</div>
+    
+    <div id="top-center" class="hud-block">
+      <span id="score-tide">TIDE 0</span>
+      <span id="round-label">ROUND 1</span>
+      <span id="score-reef">0 REEF</span>
+      <span id="timer">01:40</span>
+    </div>
+    
+    <div id="top-right" class="hud-block">
+      <div id="money">$800</div>
+      <div id="weapon-name">PISTOL</div>
+    </div>
+    
+    <div id="killfeed"></div>
+    
+    <div id="health-box" class="hud-block">
+      <div id="health-num">100</div>
+      <div id="health-bar"><div id="health-fill"></div></div>
+    </div>
+    
+    <div id="ammo-box" class="hud-block">
+      <span id="ammo-mag">12</span>/<span id="ammo-reserve">36</span>
+    </div>
+    
+    <div id="plant-bar"><div id="plant-fill"></div></div>
+    
+    <div id="toast"></div>
+    
+    <div id="buy-menu">
+      <h2>TACTICAL ACQUISITIONS</h2>
+      <div id="buy-items"></div>
+    </div>
+    
+    <div id="overlay">
+      <div id="overlay-title">TIDELOCK HARBOR</div>
+      <div id="overlay-copy">TACTICAL CONTAINER-TERMINAL OPERATIONS</div>
+      <div id="overlay-sub">FIRST TO 5 WINS — TIDE (AZURE) VS REEF (REEF)</div>
+      <button id="play">DEPLOY</button>
+    </div>
+  </div>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
