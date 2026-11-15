@@ -14,156 +14,140 @@ const FRICTION = 9;
 const GRAVITY = 20;
 const JUMP_SPEED = 6.2;
 
-const _box = new THREE.Box3();
-const _wish = new THREE.Vector3();
-
 export function createPlayer(colliders) {
-  return {
-    position: new THREE.Vector3(0, 0, 13),
-    velocity: new THREE.Vector3(),
-    yaw: 0,
-    pitch: 0,
-    eye: STAND_EYE,
-    onGround: true,
-    crouching: false,
-    height: STAND_HEIGHT,
-    health: 100,
-    alive: true,
+  const position = new THREE.Vector3(0, 0, 14);
+  const velocity = new THREE.Vector3();
+  let yaw = 0;
+  let pitch = 0;
+  let eye = STAND_EYE;
+  let onGround = true;
+  let crouching = false;
+  let height = STAND_HEIGHT;
 
-    damage(dmg) {
-      if (!this.alive) return false;
-      this.health -= dmg;
-      if (this.health <= 0) {
-        this.health = 0;
-        this.alive = false;
-        return true;
-      }
-      return false;
-    },
+  const probeBox = new THREE.Box3();
+  const wishDir = new THREE.Vector3();
 
-    spawn() {
-      this.position.set(0, 0, 13);
-      this.velocity.set(0, 0, 0);
-      this.yaw = 0;
-      this.pitch = 0;
-      this.health = 100;
-      this.alive = true;
-      this.onGround = true;
-      this.crouching = false;
-      this.height = STAND_HEIGHT;
-      this.eye = STAND_EYE;
-    },
-
-    step(dt, keys) {
-      if (typeof keys.has !== 'function') keys = new Set(Object.keys(keys).filter(k => keys[k]));
-      const wantCrouch = keys.has('ControlLeft') || keys.has('KeyC');
-      const targetHeight = wantCrouch ? CROUCH_HEIGHT : STAND_HEIGHT;
-      const targetEye = wantCrouch ? CROUCH_EYE : STAND_EYE;
-
-      if (wantCrouch) {
-        this.crouching = true;
-        this.height = CROUCH_HEIGHT;
-        this.eye = CROUCH_EYE;
-      } else if (this.crouching) {
-        _box.min.set(this.position.x - RADIUS, this.position.y, this.position.z - RADIUS);
-        _box.max.set(this.position.x + RADIUS, this.position.y + STAND_HEIGHT, this.position.z + RADIUS);
-        let fits = true;
-        for (let i = 0; i < colliders.length; i++) {
-          if (_box.intersectsBox(colliders[i])) {
-            fits = false;
-            break;
-          }
-        }
-        if (fits) {
-          this.crouching = false;
-          this.height = STAND_HEIGHT;
-          this.eye = STAND_EYE;
-        }
-      }
-
-      const speed = this.crouching ? CROUCH_SPEED : WALK_SPEED;
-      _wish.set(0, 0, 0);
-      if (keys.has('KeyW')) _wish.z -= 1;
-      if (keys.has('KeyS')) _wish.z += 1;
-      if (keys.has('KeyA')) _wish.x -= 1;
-      if (keys.has('KeyD')) _wish.x += 1;
-      if (_wish.lengthSq() > 0) {
-        _wish.normalize();
-        _wish.applyAxisAngle(THREE.Vector3.Y, this.yaw);
-      }
-
-      const accel = this.onGround ? GROUND_ACCEL : AIR_ACCEL;
-      if (this.onGround) {
-        const drop = this.velocity.clone().multiplyScalar(FRICTION * dt);
-        this.velocity.sub(drop);
-        this.velocity.x += _wish.x * speed * accel * dt;
-        this.velocity.z += _wish.z * speed * accel * dt;
-        if (keys.has('Space')) {
-          this.velocity.y = JUMP_SPEED;
-          this.onGround = false;
-        }
-      } else {
-        this.velocity.x += _wish.x * speed * accel * dt;
-        this.velocity.z += _wish.z * speed * accel * dt;
-        this.velocity.y -= GRAVITY * dt;
-      }
-
-      this.position.x += this.velocity.x * dt;
-      _box.min.set(this.position.x - RADIUS, this.position.y, this.position.z - RADIUS);
-      _box.max.set(this.position.x + RADIUS, this.position.y + this.height, this.position.z + RADIUS);
-      for (let i = 0; i < colliders.length; i++) {
-        if (_box.intersectsBox(colliders[i])) {
-          if (this.velocity.x > 0) this.position.x = colliders[i].min.x - RADIUS;
-          else if (this.velocity.x < 0) this.position.x = colliders[i].max.x + RADIUS;
-          this.velocity.x = 0;
-          break;
-        }
-      }
-
-      this.position.z += this.velocity.z * dt;
-      _box.min.set(this.position.x - RADIUS, this.position.y, this.position.z - RADIUS);
-      _box.max.set(this.position.x + RADIUS, this.position.y + this.height, this.position.z + RADIUS);
-      for (let i = 0; i < colliders.length; i++) {
-        if (_box.intersectsBox(colliders[i])) {
-          if (this.velocity.z > 0) this.position.z = colliders[i].min.z - RADIUS;
-          else if (this.velocity.z < 0) this.position.z = colliders[i].max.z + RADIUS;
-          this.velocity.z = 0;
-          break;
-        }
-      }
-
-      this.position.y += this.velocity.y * dt;
-      _box.min.set(this.position.x - RADIUS, this.position.y, this.position.z - RADIUS);
-      _box.max.set(this.position.x + RADIUS, this.position.y + this.height, this.position.z + RADIUS);
-      this.onGround = false;
-      for (let i = 0; i < colliders.length; i++) {
-        if (_box.intersectsBox(colliders[i])) {
-          if (this.velocity.y < 0) {
-            this.position.y = colliders[i].max.y;
-            this.onGround = true;
-          } else if (this.velocity.y > 0) {
-            this.position.y = colliders[i].min.y - this.height;
-          }
-          this.velocity.y = 0;
-          break;
-        }
-      }
-    },
-
-    look(dx, dy, sensitivity = 0.0022) {
-      this.yaw -= dx * sensitivity;
-      this.pitch -= dy * sensitivity;
-      this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
-    },
-
-    recoil(pitchKick, yawKick = 0) {
-      this.pitch -= pitchKick;
-      this.pitch = Math.max(-1.45, Math.min(1.45, this.pitch));
-      this.yaw += (Math.random() - 0.5) * yawKick;
-    },
-
-    groundSpeed() {
-      return Math.hypot(this.velocity.x, this.velocity.z);
+  function checkCollision(pos, h) {
+    probeBox.min.set(pos.x - RADIUS, pos.y, pos.z - RADIUS);
+    probeBox.max.set(pos.x + RADIUS, pos.y + h, pos.z + RADIUS);
+    for (let i = 0; i < colliders.length; i++) {
+      if (probeBox.intersectsBox(colliders[i])) return true;
     }
+    return false;
+  }
+
+  function step(dt, keys) {
+    const wantCrouch = keys.has('ControlLeft') || keys.has('KeyC');
+    if (wantCrouch) {
+      if (!crouching) {
+        crouching = true;
+        height = CROUCH_HEIGHT;
+        position.y += STAND_HEIGHT - CROUCH_HEIGHT;
+      }
+    } else if (crouching) {
+      probeBox.min.set(position.x - RADIUS, position.y, position.z - RADIUS);
+      probeBox.max.set(position.x + RADIUS, position.y + STAND_HEIGHT, position.z + RADIUS);
+      let blocked = false;
+      for (let i = 0; i < colliders.length; i++) {
+        if (probeBox.intersectsBox(colliders[i])) { blocked = true; break; }
+      }
+      if (!blocked) {
+        crouching = false;
+        height = STAND_HEIGHT;
+      }
+    }
+
+    const targetEye = crouching ? CROUCH_EYE : STAND_EYE;
+    eye += (targetEye - eye) * Math.min(1, dt * 15);
+
+    wishDir.set(0, 0, 0);
+    if (keys.has('KeyW')) wishDir.z -= 1;
+    if (keys.has('KeyS')) wishDir.z += 1;
+    if (keys.has('KeyA')) wishDir.x -= 1;
+    if (keys.has('KeyD')) wishDir.x += 1;
+    wishDir.normalize();
+    wishDir.applyAxisAngle(THREE.YAxis, yaw);
+
+    const speed = crouching ? CROUCH_SPEED : WALK_SPEED;
+    const accel = onGround ? GROUND_ACCEL : AIR_ACCEL;
+
+    if (onGround) {
+      const drop = velocity.clone().multiplyScalar(FRICTION * dt);
+      velocity.sub(drop);
+      velocity.x += wishDir.x * speed * accel * dt;
+      velocity.z += wishDir.z * speed * accel * dt;
+      if (keys.has('Space')) {
+        velocity.y = JUMP_SPEED;
+        onGround = false;
+      }
+    } else {
+      velocity.x += wishDir.x * speed * accel * dt;
+      velocity.z += wishDir.z * speed * accel * dt;
+      velocity.y -= GRAVITY * dt;
+    }
+
+    position.x += velocity.x * dt;
+    if (checkCollision(position, height)) {
+      position.x -= velocity.x * dt;
+      velocity.x = 0;
+    }
+
+    position.z += velocity.z * dt;
+    if (checkCollision(position, height)) {
+      position.z -= velocity.z * dt;
+      velocity.z = 0;
+    }
+
+    position.y += velocity.y * dt;
+    if (checkCollision(position, height)) {
+      position.y -= velocity.y * dt;
+      if (velocity.y < 0) onGround = true;
+      velocity.y = 0;
+    } else {
+      onGround = false;
+    }
+  }
+
+  function look(dx, dy, sensitivity = 0.0022) {
+    yaw -= dx * sensitivity;
+    pitch = Math.max(-1.45, Math.min(1.45, pitch - dy * sensitivity));
+  }
+
+  function recoil(pitchKick, yawKick = 0) {
+    pitch = Math.max(-1.45, Math.min(1.45, pitch - pitchKick));
+    yaw += (Math.random() - 0.5) * yawKick;
+  }
+
+  function groundSpeed() {
+    return Math.sqrt(velocity.x * velocity.x + velocity.z * velocity.z);
+  }
+
+  function spawn(side) {
+    if (side === 'defend') { position.set(0, 0, -14); yaw = Math.PI; }
+    else { position.set(0, 0, 14); yaw = 0; }
+    velocity.set(0, 0, 0);
+    pitch = 0;
+    height = STAND_HEIGHT;
+    eye = STAND_EYE;
+    crouching = false;
+    onGround = true;
+  }
+
+  return {
+    get position() { return position; },
+    get velocity() { return velocity; },
+    get yaw() { return yaw; },
+    set yaw(v) { yaw = v; },
+    get pitch() { return pitch; },
+    set pitch(v) { pitch = v; },
+    get eye() { return eye; },
+    get onGround() { return onGround; },
+    get crouching() { return crouching; },
+    get height() { return height; },
+    step,
+    look,
+    recoil,
+    groundSpeed,
+    spawn
   };
 }
