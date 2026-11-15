@@ -1,18 +1,18 @@
-// TIDELOCK HARBOR - Palette single source of truth for colours in JS and CSS.
+// The PALETTE is the single source of truth for colours in JS and CSS for EMBER CANYON.
 
 export const PALETTE = {
-    canvas: '#0f141b',
-    surface: '#1d2530',
-    hairline: '#2e3a47',
-    ink: '#e8e4d8',
-    muted: '#8fa3b0',
-    accent: '#f2a541',
-  accentSoft: '#f7c06a',
-    azure: '#37c8d9',
-    ember: '#e05a4e',
+    canvas: '#f0c078',
+    surface: '#8a6a42',
+    hairline: '#4a3a26',
+    ink: '#f2e8d5',
+    muted: '#b8a88e',
+    accent: '#f7b731',
+    teal: '#3ec6c0',
+    crimson: '#e04e3a',
     gold: '#f0c040'
 };
 
 export function shade(name) {
-    return PALETTE[name] || PALETTE.canvas;
+  // Unknown names fall back to ink so a typo never renders black.
+    return PALETTE[name] || PALETTE.ink;
 }
